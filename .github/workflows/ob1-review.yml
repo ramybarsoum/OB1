@@ -7,6 +7,8 @@ name: OB1 Automated Review
 # This means: automated agent passes → human admin approves → merge allowed
 
 on:
+  push:
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [main]
@@ -20,7 +22,7 @@ jobs:
     name: OB1 Review
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout PR
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -28,7 +30,7 @@ jobs:
       - name: Get changed files
         id: changed
         run: |
-          # Get files changed in this PR
+          # Get files changed in this PR (or last push commit)
           changed=$(git diff --name-only origin/main...HEAD 2>/dev/null || git diff --name-only HEAD~1 HEAD)
           echo "files<<EOF" >> $GITHUB_OUTPUT
           echo "$changed" >> $GITHUB_OUTPUT
@@ -616,6 +618,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Post review comment
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         env:
           REVIEW_COMMENT: ${{ steps.review.outputs.comment }}
