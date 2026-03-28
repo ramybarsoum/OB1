@@ -1,0 +1,62 @@
+name: Sync All Forks
+
+# Runs every 6 hours and on manual trigger
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync Forks from Upstream
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync all forked repos
+        env:
+          GH_TOKEN: ${{ secrets.FORK_SYNC_PAT }}
+        run: |
+          # Get all forked repos for ramybarsoum
+          forks=$(gh repo list ramybarsoum --fork --json name --jq '.[].name' --limit 100)
+
+          total=0
+          synced=0
+          failed=0
+          skipped=0
+          failed_repos=""
+
+          for repo in $forks; do
+            total=$((total + 1))
+            echo "--- Syncing ramybarsoum/$repo ---"
+
+            # gh repo sync syncs fork's default branch from upstream
+            if gh repo sync "ramybarsoum/$repo" 2>&1; then
+              synced=$((synced + 1))
+              echo "OK: $repo synced"
+            else
+              exit_code=$?
+              # Exit code 1 with "already in sync" is not a failure
+              output=$(gh repo sync "ramybarsoum/$repo" 2>&1 || true)
+              if echo "$output" | grep -qi "already.*sync\|up to date"; then
+                skipped=$((skipped + 1))
+                echo "SKIP: $repo already up to date"
+              else
+                failed=$((failed + 1))
+                failed_repos="${failed_repos}  - ${repo}\n"
+                echo "FAIL: $repo"
+              fi
+            fi
+            echo ""
+          done
+
+          echo "========================================="
+          echo "SUMMARY: $total repos, $synced synced, $skipped already current, $failed failed"
+          echo "========================================="
+
+          if [ "$failed" -gt 0 ]; then
+            echo ""
+            echo "Failed repos:"
+            echo -e "$failed_repos"
+          fi
